@@ -19,11 +19,11 @@ const COLOR_DEFS = {
 };
 
 const STYLES_ORDER = [
+  'heart',
   'golden_willow',
   'colourful_peony',
-  'heart',
-  'blue_purple',
   'chrysanthemum',
+  'blue_purple',
   'rainbow',
   'golden_crackling',
 ];
@@ -36,11 +36,11 @@ const FireworksCanvas = forwardRef(function FireworksCanvas(
   const rocketsRef = useRef([]);
   const particlesRef = useRef([]);
   const sparksRef = useRef([]); // rocket ascent sparks
-  const flashRef = useRef(null); // momentary sky flash
+  const flashesRef = useRef([]); // radial illumination glow halos
   const animationFrameRef = useRef(null);
   const isPlayingRef = useRef(isPlaying);
   const styleIndexRef = useRef(0);
-  const stateRef = useRef('IDLE'); // 'LAUNCHING', 'EXPLODING', 'PAUSED_BETWEEN'
+  const stateRef = useRef('IDLE');
   const pauseTimerRef = useRef(null);
   const starsRef = useRef([]);
 
@@ -52,7 +52,6 @@ const FireworksCanvas = forwardRef(function FireworksCanvas(
       startLaunch(type, targetX, targetY);
     },
     triggerSurprise: () => {
-      // Pick random spectacular type
       const surpriseTypes = ['heart', 'golden_willow', 'colourful_peony', 'rainbow', 'golden_crackling'];
       const chosen = surpriseTypes[Math.floor(Math.random() * surpriseTypes.length)];
       startLaunch(chosen);
@@ -64,7 +63,7 @@ const FireworksCanvas = forwardRef(function FireworksCanvas(
       rocketsRef.current = [];
       particlesRef.current = [];
       sparksRef.current = [];
-      flashRef.current = null;
+      flashesRef.current = [];
       if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
       stateRef.current = 'IDLE';
     },
@@ -73,13 +72,13 @@ const FireworksCanvas = forwardRef(function FireworksCanvas(
   // Create faint background stars once
   function initStars(width, height) {
     const stars = [];
-    const count = 35;
+    const count = 45;
     for (let i = 0; i < count; i++) {
       stars.push({
         x: Math.random() * width,
-        y: Math.random() * height * 0.75,
-        size: Math.random() * 0.7 + 0.4,
-        alpha: Math.random() * 0.25 + 0.1,
+        y: Math.random() * height * 0.8,
+        size: Math.random() * 0.8 + 0.3,
+        alpha: Math.random() * 0.3 + 0.1,
       });
     }
     starsRef.current = stars;
@@ -98,18 +97,19 @@ const FireworksCanvas = forwardRef(function FireworksCanvas(
       styleIndexRef.current += 1;
     }
 
-    const startX = width * (0.35 + Math.random() * 0.3);
-    const startY = height;
+    const targetX = customTargetX ?? width * (0.24 + Math.random() * 0.52);
+    const targetY = customTargetY ?? height * (0.2 + Math.random() * 0.22);
 
-    const targetX = customTargetX ?? width * (0.28 + Math.random() * 0.44);
-    const targetY = customTargetY ?? height * (0.2 + Math.random() * 0.25);
+    // Natural launch base near the bottom
+    const startX = width * 0.5 + (targetX - width * 0.5) * 0.45 + (Math.random() - 0.5) * 80;
+    const startY = height;
 
     const dx = targetX - startX;
     const dy = targetY - startY;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
-    // Initial launch speed - slower, graceful aerial ascent
-    const speed = 8.4 + Math.random() * 1.6;
+    // Speed scaled for graceful ascent
+    const speed = 9.2 + Math.random() * 1.4;
     const vx = (dx / distance) * speed;
     const vy = (dy / distance) * speed;
 
@@ -122,35 +122,33 @@ const FireworksCanvas = forwardRef(function FireworksCanvas(
       targetY,
       type,
       trail: [],
-      gravity: 0.045,
-      drag: 0.994,
+      gravity: 0.048,
+      drag: 0.995,
       color: type === 'heart' ? COLOR_DEFS.pink : COLOR_DEFS.goldBright,
     });
 
     stateRef.current = 'LAUNCHING';
-
-    // Play ascending rocket whistle sound
-    fireworkAudio.playLaunchWhistle(1.0);
+    fireworkAudio.playLaunchWhistle(0.9);
   }
 
-  // --- 2. EXPLOSION GENERATORS FOR 7 DISTINCT VARIETIES ---
+  // --- 2. EXPLOSION GENERATORS ---
   function explodeRocket(rocket) {
     const { x, y, type } = rocket;
     const isMobile = window.innerWidth < 640;
 
-    // Trigger local sky flash
-    flashRef.current = {
+    // Trigger local sky flash / radial ambient glow halo (just like the reference photo!)
+    flashesRef.current.push({
       x,
       y,
-      radius: isMobile ? 180 : 280,
-      alpha: 0.18,
-      color: type === 'heart' ? '255, 100, 150' : '255, 220, 150',
-    };
+      radius: isMobile ? 220 : 340,
+      alpha: type === 'heart' ? 0.38 : 0.24,
+      decay: 0.0075,
+      color: type === 'heart' ? '255, 185, 120' : '255, 215, 110',
+    });
 
-    // Play authentic explosion sound
+    // Play authentic audio
     fireworkAudio.playExplosion(type);
 
-    // Notify parent for romantic message overlay!
     if (onExplosion) {
       onExplosion({ x, y, type });
     }
@@ -159,27 +157,95 @@ const FireworksCanvas = forwardRef(function FireworksCanvas(
 
     const particles = [];
 
-    if (type === 'golden_willow') {
-      // A. GOLDEN WILLOW: Slower, graceful cascading trails drifting downward like golden weeping willow
-      const count = isMobile ? 120 : 190;
-      for (let i = 0; i < count; i++) {
+    if (type === 'heart') {
+      // E. HEART FIREWORK (Realistic romantic heart matching reference photo)
+      const count = isMobile ? 120 : 180;
+      const heartScale = isMobile ? 0.18 : 0.24;
+
+      // Inner white-hot incandescent heart core
+      const coreCount = isMobile ? 28 : 45;
+      for (let c = 0; c < coreCount; c++) {
         const angle = Math.random() * Math.PI * 2;
-        const speed = Math.random() * 2.6 + 0.8;
-        const c = Math.random() > 0.3 ? COLOR_DEFS.gold : COLOR_DEFS.goldBright;
+        const spd = Math.random() * 1.3 + 0.3;
+        particles.push({
+          x,
+          y: y - 4,
+          vx: Math.cos(angle) * spd,
+          vy: Math.sin(angle) * spd,
+          trail: [],
+          maxTrail: 8,
+          r: 255,
+          g: 252,
+          b: 240,
+          alpha: 1,
+          decay: 0.0065,
+          gravity: 0.012,
+          friction: 0.978,
+          size: 2.8,
+          hasWhiteCore: true,
+          flicker: false,
+        });
+      }
+
+      // Heart contour boundary particles
+      for (let i = 0; i < count; i++) {
+        const t = (i / count) * Math.PI * 2;
+        // Parametric heart formula
+        const hx = 16 * Math.pow(Math.sin(t), 3);
+        const hy = -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t));
+
+        const baseSpeed = heartScale * (0.92 + Math.random() * 0.16);
+        const vx = hx * baseSpeed;
+        const vy = hy * baseSpeed;
+
+        const rand = Math.random();
+        let color = COLOR_DEFS.white;
+        if (rand > 0.6) {
+          color = COLOR_DEFS.pink;
+        } else if (rand > 0.3) {
+          color = COLOR_DEFS.goldBright;
+        }
+
         particles.push({
           x,
           y,
-          vx: Math.cos(angle) * speed,
-          vy: Math.sin(angle) * speed * 0.7 - 0.3,
+          vx,
+          vy,
           trail: [],
-          maxTrail: 20,
+          maxTrail: 16,
+          r: color.r,
+          g: color.g,
+          b: color.b,
+          alpha: 1,
+          decay: 0.0034,
+          gravity: 0.009,
+          friction: 0.988,
+          size: 2.4,
+          hasWhiteCore: true,
+          flicker: true,
+        });
+      }
+    } else if (type === 'golden_willow') {
+      // A. GOLDEN WILLOW: Cascading golden streams raining downward (matching reference photo)
+      const count = isMobile ? 140 : 210;
+      for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 2.3 + 0.6;
+        const c = Math.random() > 0.35 ? COLOR_DEFS.gold : COLOR_DEFS.goldBright;
+        particles.push({
+          x,
+          y,
+          vx: Math.cos(angle) * speed * 0.95,
+          vy: Math.sin(angle) * speed * 0.65 - 0.4,
+          trail: [],
+          maxTrail: 24, // long continuous golden stream
           r: c.r,
           g: c.g,
           b: c.b,
           alpha: 1,
-          decay: 0.0035 + Math.random() * 0.0012,
-          gravity: 0.026, // slow, gentle downward curve
-          friction: 0.986,
+          decay: 0.003,
+          gravity: 0.032, // steady, graceful downward weeping
+          friction: 0.985,
           size: 2.2,
           hasWhiteCore: true,
           flicker: true,
@@ -191,7 +257,7 @@ const FireworksCanvas = forwardRef(function FireworksCanvas(
       const palette = [COLOR_DEFS.rose, COLOR_DEFS.cyan, COLOR_DEFS.emerald, COLOR_DEFS.violet, COLOR_DEFS.gold];
       for (let i = 0; i < count; i++) {
         const angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.1;
-        const speed = Math.random() * 1.2 + 2.0; // slower, gentle expansion
+        const speed = Math.random() * 1.2 + 2.0;
         const c = palette[i % palette.length];
         particles.push({
           x,
@@ -217,7 +283,6 @@ const FireworksCanvas = forwardRef(function FireworksCanvas(
       const innerCount = isMobile ? 30 : 50;
       const outerCount = isMobile ? 80 : 140;
 
-      // Inner white-hot burst
       for (let i = 0; i < innerCount; i++) {
         const angle = Math.random() * Math.PI * 2;
         const speed = Math.random() * 1.0 + 0.8;
@@ -241,7 +306,6 @@ const FireworksCanvas = forwardRef(function FireworksCanvas(
         });
       }
 
-      // Outer long trails
       for (let i = 0; i < outerCount; i++) {
         const angle = (i / outerCount) * Math.PI * 2;
         const speed = Math.random() * 1.3 + 2.2;
@@ -266,7 +330,7 @@ const FireworksCanvas = forwardRef(function FireworksCanvas(
         });
       }
     } else if (type === 'blue_purple') {
-      // D. BLUE AND PURPLE EXPLOSION: Slow, glowing cyan and violet stars
+      // D. BLUE AND PURPLE EXPLOSION
       const count = isMobile ? 100 : 160;
       for (let i = 0; i < count; i++) {
         const angle = Math.random() * Math.PI * 2;
@@ -292,44 +356,8 @@ const FireworksCanvas = forwardRef(function FireworksCanvas(
           flicker: false,
         });
       }
-    } else if (type === 'heart') {
-      // E. HEART FIREWORK: Gentle, slow floating romantic heart
-      const count = isMobile ? 85 : 130;
-      const heartScale = isMobile ? 0.16 : 0.22;
-
-      for (let i = 0; i < count; i++) {
-        const t = (i / count) * Math.PI * 2;
-        const hx = 16 * Math.pow(Math.sin(t), 3);
-        const hy = -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t));
-
-        const baseSpeed = heartScale * (0.88 + Math.random() * 0.15);
-        const vx = hx * baseSpeed;
-        const vy = hy * baseSpeed;
-
-        const isGold = Math.random() > 0.65;
-        const c = isGold ? COLOR_DEFS.goldBright : COLOR_DEFS.pink;
-
-        particles.push({
-          x,
-          y,
-          vx,
-          vy,
-          trail: [],
-          maxTrail: 13,
-          r: c.r,
-          g: c.g,
-          b: c.b,
-          alpha: 1,
-          decay: 0.0038,
-          gravity: 0.01,
-          friction: 0.988,
-          size: 2.5,
-          hasWhiteCore: true,
-          flicker: true,
-        });
-      }
     } else if (type === 'rainbow') {
-      // F. RAINBOW EXPLOSION: Slow, majestic color wheel expanding outward
+      // F. RAINBOW EXPLOSION
       const count = isMobile ? 110 : 170;
       for (let i = 0; i < count; i++) {
         const angle = (i / count) * Math.PI * 2;
@@ -357,7 +385,7 @@ const FireworksCanvas = forwardRef(function FireworksCanvas(
         });
       }
     } else if (type === 'golden_crackling') {
-      // G. GOLDEN CRACKLING FINALE: Slower golden canopy + delayed micro-pops
+      // G. GOLDEN CRACKLING FINALE
       const count = isMobile ? 100 : 160;
       for (let i = 0; i < count; i++) {
         const angle = Math.random() * Math.PI * 2;
@@ -383,7 +411,6 @@ const FireworksCanvas = forwardRef(function FireworksCanvas(
         });
       }
 
-      // Delayed acoustic crackles with secondary sparks
       setTimeout(() => {
         fireworkAudio.playCrackles(fireworkAudio.ctx?.currentTime || 0, 14);
         const crackleCount = 35;
@@ -422,26 +449,22 @@ const FireworksCanvas = forwardRef(function FireworksCanvas(
     const w = canvas.width;
     const h = canvas.height;
 
-    // 1. Large Golden Willow
     startLaunch('golden_willow', w * 0.48, h * 0.26);
 
-    // 2. Followed by Multicolor Peony
     setTimeout(() => {
       startLaunch('colourful_peony', w * 0.32, h * 0.32);
-    }, 1800);
+    }, 1600);
 
-    // 3. Followed by Heart in Center Sky
     setTimeout(() => {
       startLaunch('heart', w * 0.5, h * 0.28);
-    }, 3600);
+    }, 3200);
 
-    // 4. Followed by Golden Crackling Cascade
     setTimeout(() => {
       startLaunch('golden_crackling', w * 0.65, h * 0.3);
       if (onComplete) {
         setTimeout(onComplete, 2500);
       }
-    }, 5200);
+    }, 4800);
   }
 
   // Helper: HSL to RGB
@@ -478,17 +501,22 @@ const FireworksCanvas = forwardRef(function FireworksCanvas(
     };
     window.addEventListener('resize', handleResize);
 
-    // Initial first launch after brief pause
+    // Initial Launch: Recreate the exact reference photo (Heart on left + Golden Willow on right!)
     const initialTimer = setTimeout(() => {
-      if (isPlayingRef.current && stateRef.current === 'IDLE') {
-        startLaunch();
+      if (isPlayingRef.current) {
+        startLaunch('heart', width * 0.35, height * 0.30);
+        setTimeout(() => {
+          if (isPlayingRef.current) {
+            startLaunch('golden_willow', width * 0.68, height * 0.38);
+          }
+        }, 500);
       }
-    }, 800);
+    }, 450);
 
     const render = () => {
       // 1. PURE BLACK NIGHT SKY CLEAR with subtle persistence for optical streaks
       ctx.globalCompositeOperation = 'source-over';
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.12)';
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.14)';
       ctx.fillRect(0, 0, width, height);
 
       // 2. Draw subtle stationary stars in distant background
@@ -500,12 +528,13 @@ const FireworksCanvas = forwardRef(function FireworksCanvas(
         ctx.fill();
       }
 
-      // 3. Localized illumination flash at detonation moment
-      if (flashRef.current) {
-        const f = flashRef.current;
+      // 3. Localized illumination flashes at detonation moments (creates glowing ambient halo)
+      for (let fIdx = flashesRef.current.length - 1; fIdx >= 0; fIdx--) {
+        const f = flashesRef.current[fIdx];
         const grad = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.radius);
-        grad.addColorStop(0, `rgba(${f.color}, ${f.alpha})`);
-        grad.addColorStop(0.5, `rgba(${f.color}, ${f.alpha * 0.4})`);
+        grad.addColorStop(0, `rgba(${f.color}, ${Math.max(0, f.alpha)})`);
+        grad.addColorStop(0.35, `rgba(${f.color}, ${Math.max(0, f.alpha * 0.55)})`);
+        grad.addColorStop(0.7, `rgba(${f.color}, ${Math.max(0, f.alpha * 0.18)})`);
         grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
 
         ctx.fillStyle = grad;
@@ -513,8 +542,10 @@ const FireworksCanvas = forwardRef(function FireworksCanvas(
         ctx.arc(f.x, f.y, f.radius, 0, Math.PI * 2);
         ctx.fill();
 
-        f.alpha -= 0.025;
-        if (f.alpha <= 0) flashRef.current = null;
+        f.alpha -= f.decay;
+        if (f.alpha <= 0) {
+          flashesRef.current.splice(fIdx, 1);
+        }
       }
 
       ctx.globalCompositeOperation = 'lighter';
@@ -526,14 +557,12 @@ const FireworksCanvas = forwardRef(function FireworksCanvas(
         rocket.trail.push({ x: rocket.x, y: rocket.y });
         if (rocket.trail.length > 12) rocket.trail.shift();
 
-        // Rocket Physics
         rocket.x += rocket.vx;
         rocket.y += rocket.vy;
         rocket.vy += rocket.gravity;
         rocket.vx *= rocket.drag;
         rocket.vy *= rocket.drag;
 
-        // Shed trailing sparks behind the rocket head
         for (let s = 0; s < 2; s++) {
           sparksRef.current.push({
             x: rocket.x + (Math.random() - 0.5) * 2,
@@ -547,7 +576,6 @@ const FireworksCanvas = forwardRef(function FireworksCanvas(
           });
         }
 
-        // Draw connected tapered rocket comet tail (No dotted lines!)
         if (rocket.trail.length > 1) {
           ctx.beginPath();
           ctx.moveTo(rocket.trail[0].x, rocket.trail[0].y);
@@ -560,21 +588,19 @@ const FireworksCanvas = forwardRef(function FireworksCanvas(
           ctx.stroke();
         }
 
-        // Brilliant incandescent white-hot rocket head
         ctx.beginPath();
         ctx.arc(rocket.x, rocket.y, 2.8, 0, Math.PI * 2);
         ctx.fillStyle = '#ffffff';
         ctx.fill();
 
-        // Check if rocket has reached target altitude or zero upward velocity
-        const reachedTarget = rocket.y <= rocket.targetY || rocket.vy >= -1.2;
+        const reachedTarget = rocket.y <= rocket.targetY || rocket.vy >= -1.0;
         if (reachedTarget) {
           explodeRocket(rocket);
           rockets.splice(rIdx, 1);
         }
       }
 
-      // 5. Update & Draw Rocket Ascent Shed Sparks
+      // 5. Update & Draw Rocket Ascent Sparks
       for (let i = sparksRef.current.length - 1; i >= 0; i--) {
         const sp = sparksRef.current[i];
         sp.x += sp.vx;
@@ -590,16 +616,14 @@ const FireworksCanvas = forwardRef(function FireworksCanvas(
         ctx.fill();
       }
 
-      // 6. Update & Draw Explosion Particles (Connected Line Trails!)
+      // 6. Update & Draw Explosion Particles
       const particles = particlesRef.current;
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
 
-        // Store past positions for continuous streak line
         p.trail.push({ x: p.x, y: p.y });
         if (p.trail.length > p.maxTrail) p.trail.shift();
 
-        // Physics
         p.x += p.vx;
         p.y += p.vy;
         p.vx *= p.friction;
@@ -617,7 +641,6 @@ const FireworksCanvas = forwardRef(function FireworksCanvas(
           currentAlpha *= 0.65 + 0.35 * Math.sin(Date.now() * 0.02 + i);
         }
 
-        // Draw connected glowing streak trail
         if (p.trail.length > 1) {
           ctx.beginPath();
           ctx.moveTo(p.trail[0].x, p.trail[0].y);
@@ -630,7 +653,6 @@ const FireworksCanvas = forwardRef(function FireworksCanvas(
           ctx.stroke();
         }
 
-        // Hot magnesium/strontium white center at the leading tip
         if (p.hasWhiteCore && currentAlpha > 0.35) {
           ctx.beginPath();
           ctx.arc(p.x, p.y, p.size * 0.55, 0, Math.PI * 2);
@@ -639,21 +661,30 @@ const FireworksCanvas = forwardRef(function FireworksCanvas(
         }
       }
 
-      // 7. CINEMATIC SEQUENTIAL PACING (ONE FIREWORK AT A TIME)
-      // When current explosion particles have mostly faded and rocket is done:
+      // 7. CINEMATIC PACING (Periodic automatic launches + full touch responsiveness)
       if (
         isPlayingRef.current &&
         rocketsRef.current.length === 0 &&
-        particles.length < 8 &&
-        stateRef.current === 'EXPLODING'
+        particles.length < 25 &&
+        stateRef.current !== 'PAUSED_BETWEEN'
       ) {
         stateRef.current = 'PAUSED_BETWEEN';
-        // Serene anticipation pause in the quiet dark night
         pauseTimerRef.current = setTimeout(() => {
-          if (isPlayingRef.current && stateRef.current === 'PAUSED_BETWEEN') {
-            startLaunch();
+          if (isPlayingRef.current) {
+            stateRef.current = 'IDLE';
+            const isPair = Math.random() > 0.55;
+            if (isPair) {
+              startLaunch('heart', width * (0.32 + Math.random() * 0.12), height * (0.28 + Math.random() * 0.08));
+              setTimeout(() => {
+                if (isPlayingRef.current) {
+                  startLaunch('golden_willow', width * (0.6 + Math.random() * 0.18), height * (0.32 + Math.random() * 0.1));
+                }
+              }, 550);
+            } else {
+              startLaunch();
+            }
           }
-        }, 2400);
+        }, 2200);
       }
 
       animationFrameRef.current = requestAnimationFrame(render);
@@ -671,16 +702,29 @@ const FireworksCanvas = forwardRef(function FireworksCanvas(
     };
   }, []);
 
-  // Touch anywhere in the night sky to launch a firework
+  // Touch or click anywhere in the night sky to launch a firework directly at that spot!
   const handleTouchLaunch = (e) => {
+    if (e.type === 'touchstart') {
+      if (e.cancelable) e.preventDefault();
+    }
     fireworkAudio.init();
 
-    const clientX = e.clientX || (e.touches && e.touches[0]?.clientX);
-    const clientY = e.clientY || (e.touches && e.touches[0]?.clientY);
-    if (!clientX || !clientY) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
 
-    // Launch a special firework towards touch point
-    const types = ['heart', 'golden_willow', 'colourful_peony', 'rainbow', 'golden_crackling'];
+    let clientX, clientY;
+    if (e.touches && e.touches.length > 0) {
+      clientX = e.touches[0].clientX - rect.left;
+      clientY = e.touches[0].clientY - rect.top;
+    } else {
+      clientX = e.clientX - rect.left;
+      clientY = e.clientY - rect.top;
+    }
+    if (clientX === undefined || clientY === undefined) return;
+
+    // Pick a spectacular firework style
+    const types = ['heart', 'golden_willow', 'colourful_peony', 'chrysanthemum', 'rainbow', 'golden_crackling'];
     const chosen = types[Math.floor(Math.random() * types.length)];
     startLaunch(chosen, clientX, clientY);
   };

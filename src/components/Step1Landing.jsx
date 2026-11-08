@@ -5,7 +5,7 @@ import { diwaliConfig } from '../config/diwaliConfig';
 import { audioManager } from '../utils/audio';
 import confetti from 'canvas-confetti';
 
-export default function Step1Landing({ onNext }) {
+export default function Step1Landing({ onNext, onOpenFireworks }) {
   const { landing } = diwaliConfig;
 
   const handleStart = () => {
@@ -94,6 +94,17 @@ export default function Step1Landing({ onNext }) {
           <Heart className="w-2.5 h-2.5 text-[#FFD36A] fill-[#FFD36A]" />
           <span>{landing.hint}</span>
         </p>
+
+        {/* Direct Fireworks Sky Access */}
+        {onOpenFireworks && (
+          <button
+            onClick={onOpenFireworks}
+            className="mt-2 text-xs text-[#FFD36A]/80 hover:text-[#FFD36A] font-serif-royal flex items-center gap-1.5 transition-colors cursor-pointer underline underline-offset-4 decoration-[#FFD36A]/30 hover:decoration-[#FFD36A]"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-[#FFD36A]" />
+            <span>Experience Fireworks Sky Directly 🎆</span>
+          </button>
+        )}
       </motion.div>
     </motion.div>
   );
